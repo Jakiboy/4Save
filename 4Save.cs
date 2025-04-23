@@ -15,6 +15,8 @@ using System.Windows.Forms;
 using Dapper;
 using HtmlAgilityPack;
 
+[assembly: System.Reflection.AssemblyMetadata("SQLite", "System.Data.SQLite")]
+
 namespace _4Save
 {
     public class Program
@@ -119,7 +121,7 @@ namespace _4Save
             };
 
             listResults.Columns.Add("ID", 100);
-            listResults.Columns.Add("Title", 300);
+            listResults.Columns.Add("Title", 250);
             listResults.Columns.Add("Platform", 60);
             listResults.Columns.Add("Date", 180);
             listResults.Columns.Add("Actions", 150);
@@ -155,6 +157,7 @@ namespace _4Save
                                 Id TEXT PRIMARY KEY,
                                 Title TEXT NOT NULL,
                                 Platform TEXT NOT NULL,
+                                Link TEXT,
                                 LastUpdated TEXT NOT NULL
                             )");
                 }
@@ -167,11 +170,17 @@ namespace _4Save
                     // Check if Platform column exists
                     var tableInfo = connection.Query("PRAGMA table_info(Games)").ToList();
                     bool platformColumnExists = tableInfo.Any(row => (string)((IDictionary<string, object>)row)["name"] == "Platform");
+                    bool linkColumnExists = tableInfo.Any(row => (string)((IDictionary<string, object>)row)["name"] == "Link");
 
-                    // Add Platform column if missing
+                    // Add columns if missing
                     if (!platformColumnExists)
                     {
                         connection.Execute("ALTER TABLE Games ADD COLUMN Platform TEXT DEFAULT 'PS4'");
+                    }
+
+                    if (!linkColumnExists)
+                    {
+                        connection.Execute("ALTER TABLE Games ADD COLUMN Link TEXT");
                     }
                 }
             }
@@ -323,23 +332,26 @@ namespace _4Save
 
             // Lookup title from appropriate source based on platform
             string? title = null;
+            string? link = null;
 
             if (info.Platform == "PS4")
             {
                 // First try orbispatches.com for PS4 games
                 var orbisResult = await GetInfoFromOrbisPatches(info.CusaId);
-                if (!string.IsNullOrEmpty(orbisResult))
+                if (!string.IsNullOrEmpty(orbisResult.Title))
                 {
-                    title = orbisResult;
+                    title = orbisResult.Title;
+                    link = orbisResult.Link;
                 }
 
                 // If not found, try serialstation.com
                 if (string.IsNullOrEmpty(title))
                 {
                     var serialResult = await GetInfoFromSerialStation(info.CusaId);
-                    if (!string.IsNullOrEmpty(serialResult))
+                    if (!string.IsNullOrEmpty(serialResult.Title))
                     {
-                        title = serialResult;
+                        title = serialResult.Title;
+                        link = serialResult.Link;
                     }
                 }
             }
@@ -347,13 +359,15 @@ namespace _4Save
             {
                 // Use prosperopatches.com for PS5 games
                 var prosperoResult = await GetInfoFromProsperoPatches(info.CusaId);
-                if (!string.IsNullOrEmpty(prosperoResult))
+                if (!string.IsNullOrEmpty(prosperoResult.Title))
                 {
-                    title = prosperoResult;
+                    title = prosperoResult.Title;
+                    link = prosperoResult.Link;
                 }
             }
 
             info.Title = title ?? string.Empty;
+            info.Link = link ?? string.Empty;
 
             // Save to database if title was found
             if (!string.IsNullOrEmpty(title))
@@ -363,13 +377,14 @@ namespace _4Save
                     using var connection = GetConnection();
                     connection.Open();
                     connection.Execute(
-                        @"INSERT OR REPLACE INTO Games (Id, Title, Platform, LastUpdated) 
-                              VALUES (@Id, @Title, @Platform, @LastUpdated)",
+                        @"INSERT OR REPLACE INTO Games (Id, Title, Platform, Link, LastUpdated) 
+                              VALUES (@Id, @Title, @Platform, @Link, @LastUpdated)",
                         new
                         {
                             Id = info.CusaId,
                             Title = info.Title,
                             Platform = info.Platform,
+                            Link = info.Link,
                             LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
                         });
                 }
@@ -380,7 +395,7 @@ namespace _4Save
             }
         }
 
-        private async Task<string?> GetInfoFromOrbisPatches(string cusaId)
+        private async Task<(string Title, string Link)> GetInfoFromOrbisPatches(string cusaId)
         {
             try
             {
@@ -402,15 +417,15 @@ namespace _4Save
                     title = CleanupTitle(title);
                 }
 
-                return title ?? null;
+                return (title ?? string.Empty, url);
             }
             catch
             {
-                return null;
+                return (string.Empty, string.Empty);
             }
         }
 
-        private async Task<string?> GetInfoFromSerialStation(string cusaId)
+        private async Task<(string Title, string Link)> GetInfoFromSerialStation(string cusaId)
         {
             try
             {
@@ -436,15 +451,15 @@ namespace _4Save
                     title = CleanupTitle(title);
                 }
 
-                return title ?? null;
+                return (title ?? string.Empty, url);
             }
             catch
             {
-                return null;
+                return (string.Empty, string.Empty);
             }
         }
 
-        private static async Task<string> GetInfoFromProsperoPatches(string ppsaId)
+        private static async Task<(string Title, string Link)> GetInfoFromProsperoPatches(string ppsaId)
         {
             try
             {
@@ -488,12 +503,12 @@ namespace _4Save
                     title = CleanupTitle(title);
                 }
 
-                return title ?? string.Empty;
+                return (title ?? string.Empty, url);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error parsing prosperopatches.com: {ex.Message}");
-                return string.Empty;
+                return (string.Empty, string.Empty);
             }
         }
 
@@ -549,8 +564,26 @@ namespace _4Save
 
             if (item.Tag is CusaInfo info)
             {
-                // Only handle Actions column (column index 4) - was 3 before adding Platform column
-                if (columnIndex == 4)
+                // Handle Title column click (column index 1)
+                if (columnIndex == 1 && !string.IsNullOrEmpty(info.Link))
+                {
+                    try
+                    {
+                        // Open the link in default browser
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = info.Link,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error opening link: {ex.Message}", "Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                // Handle Actions column (column index 5)
+                else if (columnIndex == 5)
                 {
                     // Determine if Open or Delete was clicked based on X position
                     string actionText = hitTest.SubItem.Text;
@@ -633,6 +666,7 @@ namespace _4Save
         public string Directory { get; set; }
         public DateTime? Date { get; set; }
         public string Platform { get; set; }
+        public string Link { get; set; }
     }
 
     public class CusaTitle
@@ -640,6 +674,7 @@ namespace _4Save
         public string Id { get; set; }
         public string Title { get; set; }
         public string Platform { get; set; }
+        public string Link { get; set; }
         public string LastUpdated { get; set; }
     }
 }
