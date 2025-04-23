@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
@@ -6,7 +7,6 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -143,6 +143,9 @@ namespace _4Save
 
             // Setup ListViewSubItem click handler
             listResults.MouseClick += ListResults_MouseClick;
+
+            // Enable column click for sorting
+            listResults.ColumnClick += ListResults_ColumnClick;
 
             // Add controls to form
             this.Controls.Add(lblFolderPath);
@@ -689,6 +692,46 @@ namespace _4Save
                 }
             }
         }
+
+        // Column sorting handler for ListView
+        private void ListResults_ColumnClick(object sender, ColumnClickEventArgs e)
+        {
+            // Don't sort the Actions column (column index 4)
+            if (e.Column == 4)
+                return;
+
+            ListView listView = (ListView)sender;
+
+            // Create or get the sorter
+            ListViewColumnSorter sorter;
+            if (listView.ListViewItemSorter == null)
+            {
+                sorter = new ListViewColumnSorter();
+                listView.ListViewItemSorter = sorter;
+            }
+            else
+            {
+                sorter = (ListViewColumnSorter)listView.ListViewItemSorter;
+            }
+
+            // Set the column and update sort direction
+            if (sorter.SortColumn == e.Column)
+            {
+                // Reverse the sort direction if clicking the same column
+                sorter.SortOrder = sorter.SortOrder == SortOrder.Ascending
+                    ? SortOrder.Descending
+                    : SortOrder.Ascending;
+            }
+            else
+            {
+                // Set the new sort column and default to ascending
+                sorter.SortColumn = e.Column;
+                sorter.SortOrder = SortOrder.Ascending;
+            }
+
+            // Perform the sort
+            listView.Sort();
+        }
     }
 
     public class CusaInfo
@@ -708,5 +751,57 @@ namespace _4Save
         public string Platform { get; set; }
         public string Link { get; set; }
         public string LastUpdated { get; set; }
+    }
+
+    // Implements the column sorting for ListView
+    public class ListViewColumnSorter : IComparer
+    {
+        // Column to sort
+        public int SortColumn { get; set; }
+
+        // Sort order
+        public SortOrder SortOrder { get; set; }
+
+        // Case insensitive comparer
+        private readonly CaseInsensitiveComparer _objectCompare;
+
+        // Constructor
+        public ListViewColumnSorter()
+        {
+            // Initialize with default values
+            SortColumn = 0;
+            SortOrder = SortOrder.Ascending;
+            _objectCompare = new CaseInsensitiveComparer();
+        }
+
+        // Comparison method implementation
+        public int Compare(object x, object y)
+        {
+            // Convert the objects to list view items
+            ListViewItem listViewX = (ListViewItem)x;
+            ListViewItem listViewY = (ListViewItem)y;
+
+            // Get text values to compare
+            string textX = listViewX.SubItems[SortColumn].Text;
+            string textY = listViewY.SubItems[SortColumn].Text;
+
+            // Date column needs special handling (column index 3)
+            if (SortColumn == 3)
+            {
+                // Try to parse as dates
+                if (DateTime.TryParse(textX, out DateTime dateX) && DateTime.TryParse(textY, out DateTime dateY))
+                {
+                    return SortOrder == SortOrder.Ascending ?
+                        DateTime.Compare(dateX, dateY) :
+                        DateTime.Compare(dateY, dateX);
+                }
+            }
+
+            // Perform the comparison for other columns
+            int compareResult = _objectCompare.Compare(textX, textY);
+
+            // Return the result based on sort order
+            return SortOrder == SortOrder.Ascending ? compareResult : -compareResult;
+        }
     }
 }
