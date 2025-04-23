@@ -85,7 +85,7 @@ namespace _4Save
             {
                 Text = "Browse",
                 Location = new System.Drawing.Point(660, 10),
-                Width = 80
+                Width = 100
             };
             btnBrowse.Click += BtnBrowse_Click;
 
@@ -93,7 +93,7 @@ namespace _4Save
             {
                 Text = "Scan",
                 Location = new System.Drawing.Point(660, 45),
-                Width = 80
+                Width = 100
             };
             btnScan.Click += BtnScan_Click;
 
