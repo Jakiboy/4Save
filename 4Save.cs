@@ -260,7 +260,7 @@ namespace _4Save
                 {
                     connection.Open();
                     var cachedInfo = connection.Query<CusaTitle>(
-                        "SELECT Id, Title, Platform FROM Games WHERE Id IN @GameIds",
+                        "SELECT Id, Title, Platform, Link FROM Games WHERE Id IN @GameIds",
                         new { GameIds = gameInfoList.Select(c => c.CusaId).ToArray() }
                     ).ToDictionary(c => c.Id);
 
@@ -269,6 +269,7 @@ namespace _4Save
                     {
                         info.Title = cachedInfo[info.CusaId].Title;
                         info.Platform = cachedInfo[info.CusaId].Platform;
+                        info.Link = cachedInfo[info.CusaId].Link;
                     }
                 }
 
@@ -349,6 +350,7 @@ namespace _4Save
                 {
                     title = orbisResult.Title;
                     link = orbisResult.Link;
+                    Console.WriteLine($"Debug - Found title on orbispatches: {title} with link: {link}");
                 }
 
                 // If not found, try serialstation.com
@@ -359,6 +361,7 @@ namespace _4Save
                     {
                         title = serialResult.Title;
                         link = serialResult.Link;
+                        Console.WriteLine($"Debug - Found title on serialstation: {title} with link: {link}");
                     }
                 }
             }
@@ -422,9 +425,13 @@ namespace _4Save
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
                     title = CleanupTitle(title);
+
+                    // If we found a title, ensure we return the URL
+                    if (!string.IsNullOrEmpty(title))
+                        return (title, url);
                 }
 
-                return (title ?? string.Empty, url);
+                return (string.Empty, string.Empty);
             }
             catch
             {
@@ -456,9 +463,13 @@ namespace _4Save
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
                     title = CleanupTitle(title);
+
+                    // If we found a title, ensure we return the URL
+                    if (!string.IsNullOrEmpty(title))
+                        return (title, url);
                 }
 
-                return (title ?? string.Empty, url);
+                return (string.Empty, string.Empty);
             }
             catch
             {
@@ -508,9 +519,13 @@ namespace _4Save
                     }
 
                     title = CleanupTitle(title);
+
+                    // If we found a title, ensure we return the URL
+                    if (!string.IsNullOrEmpty(title))
+                        return (title, url);
                 }
 
-                return (title ?? string.Empty, url);
+                return (string.Empty, string.Empty);
             }
             catch (Exception ex)
             {
