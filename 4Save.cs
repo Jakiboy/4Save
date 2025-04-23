@@ -102,6 +102,7 @@ namespace _4Save
 
             listResults.Columns.Add("CUSA ID", 100);
             listResults.Columns.Add("Title", 300);
+            listResults.Columns.Add("Platform", 60);
             listResults.Columns.Add("Date", 180);
             listResults.Columns.Add("Actions", 150);
 
@@ -129,16 +130,33 @@ namespace _4Save
                 if (!File.Exists(dbPath))
                 {
                     SQLiteConnection.CreateFile(dbPath);
-                    using var connection = GetConnection();
-                    connection.Open();
-                    connection.Execute(
-                        @"CREATE TABLE IF NOT EXISTS CusaTitles (
+                    using (var connection = GetConnection())
+                    {
+                        connection.Open();
+                        connection.Execute(
+                            @"CREATE TABLE IF NOT EXISTS CusaTitles (
                                 CusaId TEXT PRIMARY KEY,
                                 Title TEXT NOT NULL,
+                                Platform TEXT NOT NULL,
                                 LastUpdated TEXT NOT NULL
                             )");
+                    }
                 }
-                // Remove the schema update code for ImageUrl since we don't need it anymore
+                else
+                {
+                    // Ensure Platform column exists in existing databases
+                    using var connection = GetConnection();
+                    connection.Open();
+
+                    // Check if Platform column exists
+                    var tableInfo = connection.Query("PRAGMA table_info(CusaTitles)").ToList();
+                    bool platformColumnExists = tableInfo.Any(row => (string)((IDictionary<string, object>)row)["name"] == "Platform");
+
+                    if (!platformColumnExists)
+                    {
+                        connection.Execute("ALTER TABLE CusaTitles ADD COLUMN Platform TEXT DEFAULT 'PS4'");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -177,49 +195,63 @@ namespace _4Save
             try
             {
                 string[] directories = Directory.GetDirectories(txtFolderPath.Text);
-                List<CusaInfo> cusaInfoList = new();
+                List<CusaInfo> gameInfoList = new();
 
-                // Extract CUSA IDs from folder names and get dates
+                // Extract CUSA and PPSA IDs from folder names and get dates
                 foreach (string dir in directories)
                 {
                     string dirName = Path.GetFileName(dir);
-                    Match match = Regex.Match(dirName, @"CUSA\d{5}", RegexOptions.IgnoreCase);
-                    if (match.Success)
+                    Match matchCusa = Regex.Match(dirName, @"CUSA\d{5}", RegexOptions.IgnoreCase);
+                    Match matchPpsa = Regex.Match(dirName, @"PPSA\d{5}", RegexOptions.IgnoreCase);
+
+                    if (matchCusa.Success)
                     {
-                        cusaInfoList.Add(new CusaInfo
+                        gameInfoList.Add(new CusaInfo
                         {
-                            CusaId = match.Value.ToUpper(),
+                            CusaId = matchCusa.Value.ToUpper(),
                             Directory = dir,
-                            Date = GetFolderDate(dir)
+                            Date = GetFolderDate(dir),
+                            Platform = "PS4"
+                        });
+                    }
+                    else if (matchPpsa.Success)
+                    {
+                        gameInfoList.Add(new CusaInfo
+                        {
+                            CusaId = matchPpsa.Value.ToUpper(),
+                            Directory = dir,
+                            Date = GetFolderDate(dir),
+                            Platform = "PS5"
                         });
                     }
                 }
 
                 // Update status
-                lblStatus.Text = $"Found {cusaInfoList.Count} CUSA IDs. Looking up titles...";
+                lblStatus.Text = $"Found {gameInfoList.Count} game IDs. Looking up titles...";
 
                 // First check the database for cached titles
                 using (var connection = GetConnection())
                 {
                     connection.Open();
                     var cachedInfo = connection.Query<CusaTitle>(
-                        "SELECT CusaId, Title FROM CusaTitles WHERE CusaId IN @CusaIds",
-                        new { CusaIds = cusaInfoList.Select(c => c.CusaId).ToArray() }
+                        "SELECT CusaId, Title, Platform FROM CusaTitles WHERE CusaId IN @GameIds",
+                        new { GameIds = gameInfoList.Select(c => c.CusaId).ToArray() }
                     ).ToDictionary(c => c.CusaId);
 
                     // Add cached info to the list
-                    foreach (var info in cusaInfoList.Where(c => cachedInfo.ContainsKey(c.CusaId)))
+                    foreach (var info in gameInfoList.Where(c => cachedInfo.ContainsKey(c.CusaId)))
                     {
                         info.Title = cachedInfo[info.CusaId].Title;
+                        info.Platform = cachedInfo[info.CusaId].Platform;
                     }
                 }
 
                 // Lookup titles for items not in the database
                 int processed = 0;
-                int totalToProcess = cusaInfoList.Count(c => string.IsNullOrEmpty(c.Title));
-                int totalItems = cusaInfoList.Count;
+                int totalToProcess = gameInfoList.Count(c => string.IsNullOrEmpty(c.Title));
+                int totalItems = gameInfoList.Count;
 
-                foreach (CusaInfo info in cusaInfoList.Where(c => string.IsNullOrEmpty(c.Title)))
+                foreach (CusaInfo info in gameInfoList.Where(c => string.IsNullOrEmpty(c.Title)))
                 {
                     processed++;
                     lblStatus.Text = $"Processing: {processed}/{totalToProcess} (Total: {totalItems})";
@@ -229,26 +261,30 @@ namespace _4Save
                 }
 
                 // Display all results
-                foreach (CusaInfo info in cusaInfoList.OrderBy(c => c.CusaId))
+                foreach (CusaInfo info in gameInfoList.OrderBy(c => c.CusaId))
                 {
                     ListViewItem item = new(info.CusaId);
 
-                    // Make the title item look like a link if we have an image
+                    // Add title
                     string titleText = info.Title ?? "Not found";
                     item.SubItems.Add(titleText);
 
+                    // Add platform
+                    item.SubItems.Add(info.Platform);
+
+                    // Add date
                     item.SubItems.Add(info.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Unknown");
 
                     // Add actions column with Open and Delete buttons
                     var actionsSubItem = item.SubItems.Add("📁 Open | 🗑️ Delete");
 
-                    // Store the folder path in the item's tag
+                    // Store the info in the item's tag
                     item.Tag = info;
 
                     listResults.Items.Add(item);
                 }
 
-                lblStatus.Text = $"Completed. Found {cusaInfoList.Count} CUSA IDs.";
+                lblStatus.Text = $"Completed. Found {gameInfoList.Count} game IDs.";
             }
             catch (Exception ex)
             {
@@ -263,22 +299,40 @@ namespace _4Save
 
         private async Task LookupAndSaveTitle(CusaInfo info)
         {
-            // First try orbispatches.com
+            // Determine platform based on ID prefix
+            info.Platform = info.CusaId.StartsWith("CUSA", StringComparison.OrdinalIgnoreCase) ? "PS4" :
+                            info.CusaId.StartsWith("PPSA", StringComparison.OrdinalIgnoreCase) ? "PS5" :
+                            "Unknown";
+
+            // Lookup title from appropriate source based on platform
             string? title = null;
 
-            var orbisResult = await GetInfoFromOrbisPatches(info.CusaId);
-            if (!string.IsNullOrEmpty(orbisResult))
+            if (info.Platform == "PS4")
             {
-                title = orbisResult;
-            }
-
-            // If not found, try serialstation.com
-            if (string.IsNullOrEmpty(title))
-            {
-                var serialResult = await GetInfoFromSerialStation(info.CusaId);
-                if (!string.IsNullOrEmpty(serialResult))
+                // First try orbispatches.com for PS4 games
+                var orbisResult = await GetInfoFromOrbisPatches(info.CusaId);
+                if (!string.IsNullOrEmpty(orbisResult))
                 {
-                    title = serialResult;
+                    title = orbisResult;
+                }
+
+                // If not found, try serialstation.com
+                if (string.IsNullOrEmpty(title))
+                {
+                    var serialResult = await GetInfoFromSerialStation(info.CusaId);
+                    if (!string.IsNullOrEmpty(serialResult))
+                    {
+                        title = serialResult;
+                    }
+                }
+            }
+            else if (info.Platform == "PS5")
+            {
+                // Use prosperopatches.com for PS5 games
+                var prosperoResult = await GetInfoFromProsperoPatches(info.CusaId);
+                if (!string.IsNullOrEmpty(prosperoResult))
+                {
+                    title = prosperoResult;
                 }
             }
 
@@ -289,19 +343,18 @@ namespace _4Save
             {
                 try
                 {
-                    using (var connection = GetConnection())
-                    {
-                        connection.Open();
-                        connection.Execute(
-                            @"INSERT OR REPLACE INTO CusaTitles (CusaId, Title, LastUpdated) 
-                              VALUES (@CusaId, @Title, @LastUpdated)",
-                            new
-                            {
-                                CusaId = info.CusaId,
-                                Title = info.Title,
-                                LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                            });
-                    }
+                    using var connection = GetConnection();
+                    connection.Open();
+                    connection.Execute(
+                        @"INSERT OR REPLACE INTO CusaTitles (CusaId, Title, Platform, LastUpdated) 
+                              VALUES (@CusaId, @Title, @Platform, @LastUpdated)",
+                        new
+                        {
+                            CusaId = info.CusaId,
+                            Title = info.Title,
+                            Platform = info.Platform,
+                            LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                        });
                 }
                 catch (Exception ex)
                 {
@@ -315,12 +368,14 @@ namespace _4Save
             try
             {
                 string url = $"https://orbispatches.com/{cusaId}";
-                HtmlWeb web = new();
-                web.AutoDetectEncoding = true;
-                web.OverrideEncoding = Encoding.UTF8;
+                HtmlWeb web = new()
+                {
+                    AutoDetectEncoding = true,
+                    OverrideEncoding = Encoding.UTF8
+                };
                 HtmlAgilityPack.HtmlDocument doc = await Task.Run(() => web.Load(url));
 
-                string title = null;
+                string? title = null;
 
                 // Parse title
                 HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//header//h1[@class='bd-title']");
@@ -338,24 +393,56 @@ namespace _4Save
             }
         }
 
-        private async Task<string> GetInfoFromSerialStation(string cusaId)
+        private async Task<string?> GetInfoFromSerialStation(string cusaId)
         {
             try
             {
                 // Split CUSA ID for serialstation format
-                string mainPart = cusaId.Substring(0, 4); // "CUSA"
-                string numberPart = cusaId.Substring(4);  // "00031"
+                string mainPart = cusaId[..4]; // "CUSA"
+                string numberPart = cusaId[4..];  // "00031"
 
                 string url = $"https://serialstation.com/titles/{mainPart}/{numberPart}";
-                HtmlWeb web = new();
-                web.AutoDetectEncoding = true;
-                web.OverrideEncoding = Encoding.UTF8;
+                HtmlWeb web = new()
+                {
+                    AutoDetectEncoding = true,
+                    OverrideEncoding = Encoding.UTF8
+                };
                 HtmlAgilityPack.HtmlDocument doc = await Task.Run(() => web.Load(url));
 
-                string title = null;
+                string? title = null;
 
                 // Parse title
                 HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//main[contains(@class,'container')]//h1");
+                if (titleNode != null)
+                {
+                    title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
+                    title = CleanupTitle(title);
+                }
+
+                return title ?? null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task<string> GetInfoFromProsperoPatches(string ppsaId)
+        {
+            try
+            {
+                string url = $"https://prosperopatches.com/{ppsaId}";
+                HtmlWeb web = new()
+                {
+                    AutoDetectEncoding = true,
+                    OverrideEncoding = Encoding.UTF8
+                };
+                HtmlAgilityPack.HtmlDocument doc = await Task.Run(() => web.Load(url));
+
+                string? title = null;
+
+                // Parse title using the correct CSS selector: header h1.bd-title
+                HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//header//h1[@class='bd-title']");
                 if (titleNode != null)
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
@@ -370,7 +457,7 @@ namespace _4Save
             }
         }
 
-        private string CleanupTitle(string title)
+        private static string CleanupTitle(string title)
         {
             if (string.IsNullOrEmpty(title))
                 return title;
@@ -384,7 +471,7 @@ namespace _4Save
             return title.Trim();
         }
 
-        private DateTime? GetFolderDate(string folderPath)
+        private static DateTime? GetFolderDate(string folderPath)
         {
             try
             {
@@ -422,8 +509,8 @@ namespace _4Save
 
             if (item.Tag is CusaInfo info)
             {
-                // Only handle Actions column (column index 3)
-                if (columnIndex == 3)
+                // Only handle Actions column (column index 4) - was 3 before adding Platform column
+                if (columnIndex == 4)
                 {
                     // Determine if Open or Delete was clicked based on X position
                     string actionText = hitTest.SubItem.Text;
@@ -470,25 +557,24 @@ namespace _4Save
             {
                 try
                 {
-                    using (var connection = GetConnection())
-                    {
-                        connection.Open();
-                        int affected = connection.Execute(
-                            "DELETE FROM CusaTitles WHERE CusaId = @CusaId",
-                            new { CusaId = cusaId });
+                    using var connection = GetConnection();
+                    connection.Open();
+                    int affected = connection.Execute(
+                        "DELETE FROM CusaTitles WHERE CusaId = @CusaId",
+                        new { CusaId = cusaId });
 
-                        if (affected > 0)
-                        {
-                            // Remove from ListView
-                            listResults.Items.Remove(item);
-                            lblStatus.Text = $"Deleted {cusaId} from database.";
-                        }
-                        else
-                        {
-                            // Item might not be in DB but still in list
-                            MessageBox.Show($"Item {cusaId} was not found in the database.",
-                                "Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
+                    if (affected > 0)
+                    {
+                        // Remove from ListView
+                        listResults.Items.Remove(item);
+                        lblStatus.Text = $"Deleted {cusaId} from database.";
+                    }
+                    else
+                    {
+                        // Item might not be in DB but still in list
+                        MessageBox.Show($"Item {cusaId} was not found in the database.",
+                            "Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
                     }
                 }
                 catch (Exception ex)
@@ -506,12 +592,14 @@ namespace _4Save
         public string Title { get; set; }
         public string Directory { get; set; }
         public DateTime? Date { get; set; }
+        public string Platform { get; set; }
     }
 
     public class CusaTitle
     {
         public string CusaId { get; set; }
         public string Title { get; set; }
+        public string Platform { get; set; }
         public string LastUpdated { get; set; }
     }
 }
