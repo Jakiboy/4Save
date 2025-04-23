@@ -302,14 +302,8 @@ namespace _4Save
                     // Add date
                     item.SubItems.Add(info.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Unknown");
 
-                    // Add actions column with Open, Visit and Delete buttons - increase column width
-                    string actionsText = "📁 Open";
-                    if (!string.IsNullOrEmpty(info.Link))
-                    {
-                        actionsText += " | 🔗 Visit";
-                    }
-                    actionsText += " | 🗑️ Delete";
-
+                    // Add actions column with Open, Visit and Delete buttons
+                    string actionsText = "📁 Open | 🔗 Visit | ❌ Delete";
                     item.SubItems.Add(actionsText);
 
                     // Store the info in the item's tag
