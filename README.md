@@ -19,4 +19,4 @@
 
 ## Preview
 
-[![4Save](static/preview.jpg)](#)
+[![4Save](.static/preview.jpg)](#)
