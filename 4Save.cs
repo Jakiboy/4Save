@@ -44,9 +44,12 @@ namespace _4Save
 
         private void InitializeComponent()
         {
-            this.Text = "4Save (CUSA ID Title Lookup)";
-            this.Size = new System.Drawing.Size(1000, 600);
-            this.MinimumSize = new System.Drawing.Size(800, 400);
+            this.Text = "4Save (Games Title Lookup)";
+            this.Size = new System.Drawing.Size(850, 600);
+            this.MinimumSize = new System.Drawing.Size(850, 400);
+            this.MaximumSize = new System.Drawing.Size(850, 2000);
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
 
             // Folder path selection
             Label lblFolderPath = new()
@@ -130,31 +133,30 @@ namespace _4Save
                 if (!File.Exists(dbPath))
                 {
                     SQLiteConnection.CreateFile(dbPath);
-                    using (var connection = GetConnection())
-                    {
-                        connection.Open();
-                        connection.Execute(
-                            @"CREATE TABLE IF NOT EXISTS CusaTitles (
-                                CusaId TEXT PRIMARY KEY,
+                    using var connection = GetConnection();
+                    connection.Open();
+                    connection.Execute(
+                        @"CREATE TABLE IF NOT EXISTS Games (
+                                Id TEXT PRIMARY KEY,
                                 Title TEXT NOT NULL,
                                 Platform TEXT NOT NULL,
                                 LastUpdated TEXT NOT NULL
                             )");
-                    }
                 }
                 else
                 {
-                    // Ensure Platform column exists in existing databases
+                    // Ensure Platform column exists if using an older database
                     using var connection = GetConnection();
                     connection.Open();
 
                     // Check if Platform column exists
-                    var tableInfo = connection.Query("PRAGMA table_info(CusaTitles)").ToList();
+                    var tableInfo = connection.Query("PRAGMA table_info(Games)").ToList();
                     bool platformColumnExists = tableInfo.Any(row => (string)((IDictionary<string, object>)row)["name"] == "Platform");
 
+                    // Add Platform column if missing
                     if (!platformColumnExists)
                     {
-                        connection.Execute("ALTER TABLE CusaTitles ADD COLUMN Platform TEXT DEFAULT 'PS4'");
+                        connection.Execute("ALTER TABLE Games ADD COLUMN Platform TEXT DEFAULT 'PS4'");
                     }
                 }
             }
@@ -234,9 +236,9 @@ namespace _4Save
                 {
                     connection.Open();
                     var cachedInfo = connection.Query<CusaTitle>(
-                        "SELECT CusaId, Title, Platform FROM CusaTitles WHERE CusaId IN @GameIds",
+                        "SELECT Id, Title, Platform FROM Games WHERE Id IN @GameIds",
                         new { GameIds = gameInfoList.Select(c => c.CusaId).ToArray() }
-                    ).ToDictionary(c => c.CusaId);
+                    ).ToDictionary(c => c.Id);
 
                     // Add cached info to the list
                     foreach (var info in gameInfoList.Where(c => cachedInfo.ContainsKey(c.CusaId)))
@@ -346,11 +348,11 @@ namespace _4Save
                     using var connection = GetConnection();
                     connection.Open();
                     connection.Execute(
-                        @"INSERT OR REPLACE INTO CusaTitles (CusaId, Title, Platform, LastUpdated) 
-                              VALUES (@CusaId, @Title, @Platform, @LastUpdated)",
+                        @"INSERT OR REPLACE INTO Games (Id, Title, Platform, LastUpdated) 
+                              VALUES (@Id, @Title, @Platform, @LastUpdated)",
                         new
                         {
-                            CusaId = info.CusaId,
+                            Id = info.CusaId,
                             Title = info.Title,
                             Platform = info.Platform,
                             LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
@@ -583,8 +585,8 @@ namespace _4Save
                     using var connection = GetConnection();
                     connection.Open();
                     int affected = connection.Execute(
-                        "DELETE FROM CusaTitles WHERE CusaId = @CusaId",
-                        new { CusaId = cusaId });
+                        "DELETE FROM Games WHERE Id = @Id",
+                        new { Id = cusaId });
 
                     if (affected > 0)
                     {
@@ -620,7 +622,7 @@ namespace _4Save
 
     public class CusaTitle
     {
-        public string CusaId { get; set; }
+        public string Id { get; set; }
         public string Title { get; set; }
         public string Platform { get; set; }
         public string LastUpdated { get; set; }
