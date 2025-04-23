@@ -49,7 +49,8 @@ namespace _4Save
             this.MinimumSize = new System.Drawing.Size(800, 400);
 
             // Folder path selection
-            Label lblFolderPath = new Label
+            Label lblFolderPath = new()
+
             {
                 Text = "Select Source Folder:",
                 Location = new System.Drawing.Point(10, 15),
@@ -72,9 +73,9 @@ namespace _4Save
 
             btnScan = new Button
             {
-                Text = "Scan and Lookup",
+                Text = "Scan",
                 Location = new System.Drawing.Point(660, 45),
-                Width = 120
+                Width = 80
             };
             btnScan.Click += BtnScan_Click;
 
@@ -100,9 +101,9 @@ namespace _4Save
             };
 
             listResults.Columns.Add("CUSA ID", 100);
-            listResults.Columns.Add("Title", 580);
+            listResults.Columns.Add("Title", 300);
             listResults.Columns.Add("Date", 180);
-            listResults.Columns.Add("Actions", 100);
+            listResults.Columns.Add("Actions", 150);
 
             // Enable double buffering for smoother UI
             typeof(ListView).InvokeMember("DoubleBuffered",
@@ -128,44 +129,16 @@ namespace _4Save
                 if (!File.Exists(dbPath))
                 {
                     SQLiteConnection.CreateFile(dbPath);
-                    using (var connection = GetConnection())
-                    {
-                        connection.Open();
-                        connection.Execute(
-                            @"CREATE TABLE IF NOT EXISTS CusaTitles (
+                    using var connection = GetConnection();
+                    connection.Open();
+                    connection.Execute(
+                        @"CREATE TABLE IF NOT EXISTS CusaTitles (
                                 CusaId TEXT PRIMARY KEY,
                                 Title TEXT NOT NULL,
-                                ImageUrl TEXT,
                                 LastUpdated TEXT NOT NULL
                             )");
-                    }
                 }
-                else
-                {
-                    // Check if we need to update the schema to add the ImageUrl column
-                    using (var connection = GetConnection())
-                    {
-                        connection.Open();
-                        var columns = connection.Query<string>("PRAGMA table_info(CusaTitles)").Select(c => c.ToString().ToLower()).ToList();
-
-                        // Only add the column if it doesn't already exist (case insensitive check)
-                        if (!columns.Any(c => c.Contains("imageurl")))
-                        {
-                            try
-                            {
-                                connection.Execute("ALTER TABLE CusaTitles ADD COLUMN ImageUrl TEXT");
-                            }
-                            catch (SQLiteException ex)
-                            {
-                                // If the column already exists, ignore the error
-                                if (!ex.Message.Contains("duplicate column name"))
-                                {
-                                    throw;
-                                }
-                            }
-                        }
-                    }
-                }
+                // Remove the schema update code for ImageUrl since we don't need it anymore
             }
             catch (Exception ex)
             {
@@ -179,14 +152,13 @@ namespace _4Save
             return new SQLiteConnection($"Data Source={dbPath};Version=3;");
         }
 
-        private void BtnBrowse_Click(object sender, EventArgs e)
+        private void BtnBrowse_Click(object? sender, EventArgs e)
         {
-            using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
+            using FolderBrowserDialog folderDialog = new();
+            if (folderDialog.ShowDialog() == DialogResult.OK)
             {
-                if (folderDialog.ShowDialog() == DialogResult.OK)
-                {
-                    txtFolderPath.Text = folderDialog.SelectedPath;
-                }
+                txtFolderPath.Text = folderDialog.SelectedPath;
+
             }
         }
 
@@ -205,7 +177,7 @@ namespace _4Save
             try
             {
                 string[] directories = Directory.GetDirectories(txtFolderPath.Text);
-                List<CusaInfo> cusaInfoList = new List<CusaInfo>();
+                List<CusaInfo> cusaInfoList = new();
 
                 // Extract CUSA IDs from folder names and get dates
                 foreach (string dir in directories)
@@ -231,7 +203,7 @@ namespace _4Save
                 {
                     connection.Open();
                     var cachedInfo = connection.Query<CusaTitle>(
-                        "SELECT CusaId, Title, ImageUrl FROM CusaTitles WHERE CusaId IN @CusaIds",
+                        "SELECT CusaId, Title FROM CusaTitles WHERE CusaId IN @CusaIds",
                         new { CusaIds = cusaInfoList.Select(c => c.CusaId).ToArray() }
                     ).ToDictionary(c => c.CusaId);
 
@@ -239,16 +211,18 @@ namespace _4Save
                     foreach (var info in cusaInfoList.Where(c => cachedInfo.ContainsKey(c.CusaId)))
                     {
                         info.Title = cachedInfo[info.CusaId].Title;
-                        info.ImageUrl = cachedInfo[info.CusaId].ImageUrl;
                     }
                 }
 
                 // Lookup titles for items not in the database
                 int processed = 0;
+                int totalToProcess = cusaInfoList.Count(c => string.IsNullOrEmpty(c.Title));
+                int totalItems = cusaInfoList.Count;
+
                 foreach (CusaInfo info in cusaInfoList.Where(c => string.IsNullOrEmpty(c.Title)))
                 {
                     processed++;
-                    lblStatus.Text = $"Processing: {processed}/{cusaInfoList.Count(c => string.IsNullOrEmpty(c.Title))}";
+                    lblStatus.Text = $"Processing: {processed}/{totalToProcess} (Total: {totalItems})";
                     Application.DoEvents();
 
                     await LookupAndSaveTitle(info);
@@ -257,22 +231,18 @@ namespace _4Save
                 // Display all results
                 foreach (CusaInfo info in cusaInfoList.OrderBy(c => c.CusaId))
                 {
-                    ListViewItem item = new ListViewItem(info.CusaId);
+                    ListViewItem item = new(info.CusaId);
 
                     // Make the title item look like a link if we have an image
                     string titleText = info.Title ?? "Not found";
-                    if (!string.IsNullOrEmpty(info.ImageUrl))
-                    {
-                        titleText = $"🖼️ {titleText}";
-                    }
                     item.SubItems.Add(titleText);
 
                     item.SubItems.Add(info.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Unknown");
 
-                    // Add actions column with just the Open button
-                    var actionsSubItem = item.SubItems.Add("📁 Open");
+                    // Add actions column with Open and Delete buttons
+                    var actionsSubItem = item.SubItems.Add("📁 Open | 🗑️ Delete");
 
-                    // Store the folder path and image URL in the item's tag
+                    // Store the folder path in the item's tag
                     item.Tag = info;
 
                     listResults.Items.Add(item);
@@ -294,29 +264,25 @@ namespace _4Save
         private async Task LookupAndSaveTitle(CusaInfo info)
         {
             // First try orbispatches.com
-            string title = null;
-            string imageUrl = null;
+            string? title = null;
 
             var orbisResult = await GetInfoFromOrbisPatches(info.CusaId);
-            if (orbisResult.HasValue)
+            if (!string.IsNullOrEmpty(orbisResult))
             {
-                title = orbisResult.Value.Title;
-                imageUrl = orbisResult.Value.ImageUrl;
+                title = orbisResult;
             }
 
             // If not found, try serialstation.com
             if (string.IsNullOrEmpty(title))
             {
                 var serialResult = await GetInfoFromSerialStation(info.CusaId);
-                if (serialResult.HasValue)
+                if (!string.IsNullOrEmpty(serialResult))
                 {
-                    title = serialResult.Value.Title;
-                    imageUrl = serialResult.Value.ImageUrl;
+                    title = serialResult;
                 }
             }
 
-            info.Title = title;
-            info.ImageUrl = imageUrl;
+            info.Title = title ?? string.Empty;
 
             // Save to database if title was found
             if (!string.IsNullOrEmpty(title))
@@ -327,13 +293,12 @@ namespace _4Save
                     {
                         connection.Open();
                         connection.Execute(
-                            @"INSERT OR REPLACE INTO CusaTitles (CusaId, Title, ImageUrl, LastUpdated) 
-                              VALUES (@CusaId, @Title, @ImageUrl, @LastUpdated)",
+                            @"INSERT OR REPLACE INTO CusaTitles (CusaId, Title, LastUpdated) 
+                              VALUES (@CusaId, @Title, @LastUpdated)",
                             new
                             {
                                 CusaId = info.CusaId,
                                 Title = info.Title,
-                                ImageUrl = info.ImageUrl,
                                 LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
                             });
                     }
@@ -345,18 +310,17 @@ namespace _4Save
             }
         }
 
-        private async Task<(string Title, string ImageUrl)?> GetInfoFromOrbisPatches(string cusaId)
+        private async Task<string?> GetInfoFromOrbisPatches(string cusaId)
         {
             try
             {
                 string url = $"https://orbispatches.com/{cusaId}";
-                HtmlWeb web = new HtmlWeb();
+                HtmlWeb web = new();
                 web.AutoDetectEncoding = true;
                 web.OverrideEncoding = Encoding.UTF8;
                 HtmlAgilityPack.HtmlDocument doc = await Task.Run(() => web.Load(url));
 
                 string title = null;
-                string imageUrl = null;
 
                 // Parse title
                 HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//header//h1[@class='bd-title']");
@@ -366,23 +330,7 @@ namespace _4Save
                     title = CleanupTitle(title);
                 }
 
-                // Parse image URL from header style attribute
-                HtmlNode headerNode = doc.DocumentNode.SelectSingleNode("//header[@id='titleview-header']");
-                if (headerNode != null)
-                {
-                    string style = headerNode.GetAttributeValue("style", "");
-                    Match match = Regex.Match(style, @"url\(['""]?(https://[^'"")\s]+)['"")]?\)");
-                    if (match.Success && match.Groups.Count > 1)
-                    {
-                        imageUrl = HttpUtility.HtmlDecode(match.Groups[1].Value);
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(title))
-                {
-                    return (title, imageUrl);
-                }
-                return null;
+                return title ?? null;
             }
             catch
             {
@@ -390,7 +338,7 @@ namespace _4Save
             }
         }
 
-        private async Task<(string Title, string ImageUrl)?> GetInfoFromSerialStation(string cusaId)
+        private async Task<string> GetInfoFromSerialStation(string cusaId)
         {
             try
             {
@@ -399,13 +347,12 @@ namespace _4Save
                 string numberPart = cusaId.Substring(4);  // "00031"
 
                 string url = $"https://serialstation.com/titles/{mainPart}/{numberPart}";
-                HtmlWeb web = new HtmlWeb();
+                HtmlWeb web = new();
                 web.AutoDetectEncoding = true;
                 web.OverrideEncoding = Encoding.UTF8;
                 HtmlAgilityPack.HtmlDocument doc = await Task.Run(() => web.Load(url));
 
                 string title = null;
-                string imageUrl = null;
 
                 // Parse title
                 HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//main[contains(@class,'container')]//h1");
@@ -415,26 +362,7 @@ namespace _4Save
                     title = CleanupTitle(title);
                 }
 
-                // Parse image URL using the specific selector
-                HtmlNode imgNode = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'row')]/div[contains(@class,'col-sm-12')][contains(@class,'col-md-4')][contains(@class,'col-lg-6')]/a[@data-fancybox]//img");
-                if (imgNode != null)
-                {
-                    imageUrl = imgNode.GetAttributeValue("src", null);
-                    // Make sure it's an absolute URL
-                    if (!string.IsNullOrEmpty(imageUrl) && !imageUrl.StartsWith("http"))
-                    {
-                        // Create an absolute URL
-                        Uri baseUri = new Uri(url);
-                        Uri absoluteUri = new Uri(baseUri, imageUrl);
-                        imageUrl = absoluteUri.ToString();
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(title))
-                {
-                    return (title, imageUrl);
-                }
-                return null;
+                return title;
             }
             catch
             {
@@ -480,7 +408,7 @@ namespace _4Save
             }
         }
 
-        private void ListResults_MouseClick(object sender, MouseEventArgs e)
+        private void ListResults_MouseClick(object? sender, MouseEventArgs e)
         {
             // Get the clicked item
             ListViewItem item = listResults.GetItemAt(e.X, e.Y);
@@ -494,76 +422,80 @@ namespace _4Save
 
             if (item.Tag is CusaInfo info)
             {
-                // If Title column was clicked (column index 1) and we have an image
-                if (columnIndex == 1 && !string.IsNullOrEmpty(info.ImageUrl))
+                // Only handle Actions column (column index 3)
+                if (columnIndex == 3)
                 {
-                    ShowGameImage(info.CusaId, info.Title, info.ImageUrl);
-                }
-                // If the Actions column was clicked (column index 3)
-                else if (columnIndex == 3)
-                {
-                    // Open folder action
-                    if (Directory.Exists(info.Directory))
+                    // Determine if Open or Delete was clicked based on X position
+                    string actionText = hitTest.SubItem.Text;
+                    int separatorIndex = actionText.IndexOf("|");
+                    int openWidth = TextRenderer.MeasureText(actionText.Substring(0, separatorIndex), listResults.Font).Width;
+
+                    // Open folder action (left side of the separator)
+                    if (e.X - hitTest.SubItem.Bounds.Left <= openWidth)
                     {
-                        try
+                        if (Directory.Exists(info.Directory))
                         {
-                            Process.Start("explorer.exe", info.Directory);
+                            try
+                            {
+                                Process.Start("explorer.exe", info.Directory);
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show($"Error opening folder: {ex.Message}", "Error",
+                                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            MessageBox.Show($"Error opening folder: {ex.Message}", "Error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            MessageBox.Show("Folder does not exist.", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
+                    // Delete action (right side of the separator)
                     else
                     {
-                        MessageBox.Show("Folder does not exist.", "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        DeleteCusaFromDatabase(info.CusaId, item);
                     }
                 }
             }
         }
 
-        private void ShowGameImage(string cusaId, string title, string imageUrl)
+        private void DeleteCusaFromDatabase(string cusaId, ListViewItem item)
         {
-            try
+            // Confirm deletion with user
+            var result = MessageBox.Show($"Are you sure you want to delete {cusaId} from the database?",
+                "Confirm Deletion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
             {
-                // Create a form to display the image
-                Form imageForm = new Form
+                try
                 {
-                    Text = $"Game Cover - {cusaId} - {title}",
-                    Size = new Size(600, 800),
-                    StartPosition = FormStartPosition.CenterParent,
-                    MinimizeBox = false,
-                    MaximizeBox = false,
-                    FormBorderStyle = FormBorderStyle.FixedDialog
-                };
-
-                // Create a picture box to hold the image
-                PictureBox pictureBox = new PictureBox
-                {
-                    SizeMode = PictureBoxSizeMode.Zoom,
-                    Dock = DockStyle.Fill
-                };
-
-                // Download and set the image
-                using (WebClient client = new WebClient())
-                {
-                    byte[] imageData = client.DownloadData(imageUrl);
-                    using (MemoryStream ms = new MemoryStream(imageData))
+                    using (var connection = GetConnection())
                     {
-                        pictureBox.Image = Image.FromStream(ms);
+                        connection.Open();
+                        int affected = connection.Execute(
+                            "DELETE FROM CusaTitles WHERE CusaId = @CusaId",
+                            new { CusaId = cusaId });
+
+                        if (affected > 0)
+                        {
+                            // Remove from ListView
+                            listResults.Items.Remove(item);
+                            lblStatus.Text = $"Deleted {cusaId} from database.";
+                        }
+                        else
+                        {
+                            // Item might not be in DB but still in list
+                            MessageBox.Show($"Item {cusaId} was not found in the database.",
+                                "Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                     }
                 }
-
-                // Add picture box to form and show
-                imageForm.Controls.Add(pictureBox);
-                imageForm.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error loading image: {ex.Message}", "Image Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error deleting item: {ex.Message}", "Database Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
     }
@@ -574,14 +506,12 @@ namespace _4Save
         public string Title { get; set; }
         public string Directory { get; set; }
         public DateTime? Date { get; set; }
-        public string ImageUrl { get; set; }
     }
 
     public class CusaTitle
     {
         public string CusaId { get; set; }
         public string Title { get; set; }
-        public string ImageUrl { get; set; }
         public string LastUpdated { get; set; }
     }
 }
