@@ -33,10 +33,10 @@ namespace _4Save
     public class MainForm : Form
     {
         private TextBox txtFolderPath;
-        private Button btnBrowse;
-        private Button btnScan;
-        private ListView listResults;
-        private Label lblStatus;
+        private Button btnBrowse = null!;
+        private Button btnScan = null!;
+        private ListView listResults = null!;
+        private Label lblStatus = null!;
         private string dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "db.sqlite");
 
         public MainForm()
@@ -275,7 +275,7 @@ namespace _4Save
                     var cachedInfo = connection.Query<CusaTitle>(
                         "SELECT Id, Title, Platform, Link FROM Games WHERE Id IN @GameIds",
                         new { GameIds = gameInfoList.Select(c => c.CusaId).ToArray() }
-                    ).ToDictionary(c => c.Id);
+                    ).Where(c => c.Id != null).ToDictionary(c => c.Id!);
 
                     // Add cached info to the list
                     foreach (var info in gameInfoList.Where(c => cachedInfo.ContainsKey(c.CusaId)))
@@ -677,7 +677,14 @@ namespace _4Save
                     // Delete action
                     else
                     {
-                        DeleteCusaFromDatabase(info.CusaId, item);
+                        if (!string.IsNullOrEmpty(info.CusaId))
+                        {
+                            DeleteCusaFromDatabase(info.CusaId, item);
+                        }
+                        else
+                        {
+                            MessageBox.Show("CUSA ID is null or empty. Cannot delete.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
                     }
                 }
             }
@@ -728,7 +735,8 @@ namespace _4Save
             if (e.Column == 4)
                 return;
 
-            ListView listView = (ListView)sender;
+            if (sender is not ListView listView)
+                return;
 
             // Create or get the sorter
             ListViewColumnSorter sorter;
@@ -764,21 +772,21 @@ namespace _4Save
 
     public class CusaInfo
     {
-        public string CusaId { get; set; }
-        public string Title { get; set; }
-        public string Directory { get; set; }
+        public string? CusaId { get; set; }
+        public string? Title { get; set; }
+        public string? Directory { get; set; }
         public DateTime? Date { get; set; }
-        public string Platform { get; set; }
-        public string Link { get; set; }
+        public string? Platform { get; set; }
+        public string? Link { get; set; }
     }
 
     public class CusaTitle
     {
-        public string Id { get; set; }
-        public string Title { get; set; }
-        public string Platform { get; set; }
-        public string Link { get; set; }
-        public string LastUpdated { get; set; }
+        public string? Id { get; set; }
+        public string? Title { get; set; }
+        public string? Platform { get; set; }
+        public string? Link { get; set; }
+        public string? LastUpdated { get; set; }
     }
 
     // Implements the column sorting for ListView
@@ -803,15 +811,19 @@ namespace _4Save
         }
 
         // Comparison method implementation
-        public int Compare(object x, object y)
+        public int Compare(object? x, object? y)
         {
             // Convert the objects to list view items
-            ListViewItem listViewX = (ListViewItem)x;
-            ListViewItem listViewY = (ListViewItem)y;
+            if (x is not ListViewItem listViewX)
+                throw new ArgumentNullException(nameof(x), "Argument cannot be null.");
+            if (y is not ListViewItem listViewY)
+                throw new ArgumentNullException(nameof(y), "Argument cannot be null.");
 
             // Get text values to compare
             string textX = listViewX.SubItems[SortColumn].Text;
-            string textY = listViewY.SubItems[SortColumn].Text;
+            string textY = listViewY.SubItems.Count > SortColumn && listViewY.SubItems[SortColumn] != null
+                ? listViewY.SubItems[SortColumn].Text
+                : string.Empty;
 
             // Date column needs special handling (column index 3)
             if (SortColumn == 3)
