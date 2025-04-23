@@ -16,4 +16,7 @@
 * [Orbispatches.com (PS4)](https://orbispatches.com/)
 * [Serialstation.com (PS4)](https://serialstation.com/)
 
-[![4Save](https://media.githubusercontent.com/media/Jakiboy/4Save/refs/heads/main/.static/preview.jpg)](#)
+
+## Preview
+
+[![4Save](static/preview.jpg)](#)
