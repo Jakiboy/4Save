@@ -46,12 +46,10 @@ namespace _4Save
 
             // Disable scan button initially
             btnScan.Enabled = false;
-
-            // Add text changed handler to enable/disable scan button based on folder path
             txtFolderPath.TextChanged += TxtFolderPath_TextChanged;
         }
 
-        // Check if folder path is valid and toggle scan button accordingly
+        // Toggle scan button based on folder path validity
         private void TxtFolderPath_TextChanged(object? sender, EventArgs e)
         {
             btnScan.Enabled = !string.IsNullOrWhiteSpace(txtFolderPath.Text) && Directory.Exists(txtFolderPath.Text);
@@ -356,7 +354,6 @@ namespace _4Save
                 {
                     title = orbisResult.Title;
                     link = orbisResult.Link;
-                    Console.WriteLine($"Debug - Found title on orbispatches: {title} with link: {link}");
                 }
 
                 // If not found, try serialstation.com
@@ -367,7 +364,6 @@ namespace _4Save
                     {
                         title = serialResult.Title;
                         link = serialResult.Link;
-                        Console.WriteLine($"Debug - Found title on serialstation: {title} with link: {link}");
                     }
                 }
             }
@@ -432,7 +428,6 @@ namespace _4Save
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
                     title = CleanupTitle(title);
 
-                    // If we found a title, ensure we return the URL
                     if (!string.IsNullOrEmpty(title))
                         return (title, url);
                 }
@@ -450,8 +445,8 @@ namespace _4Save
             try
             {
                 // Split CUSA ID for serialstation format
-                string mainPart = cusaId[..4]; // "CUSA"
-                string numberPart = cusaId[4..];  // "00031"
+                string mainPart = cusaId[..4];
+                string numberPart = cusaId[4..];
 
                 string url = $"https://serialstation.com/titles/{mainPart}/{numberPart}";
                 HtmlWeb web = new()
@@ -463,14 +458,12 @@ namespace _4Save
 
                 string? title = null;
 
-                // Parse title
                 HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//main[contains(@class,'container')]//h1");
                 if (titleNode != null)
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
                     title = CleanupTitle(title);
 
-                    // If we found a title, ensure we return the URL
                     if (!string.IsNullOrEmpty(title))
                         return (title, url);
                 }
@@ -497,11 +490,9 @@ namespace _4Save
 
                 string? title = null;
 
-                // Try multiple possible selectors to find the title
-                // First try the header/h1 selector
+                // Try multiple selectors to find the title
                 HtmlNode? titleNode = doc.DocumentNode.SelectSingleNode("//header//h1[@class='bd-title']");
 
-                // If not found, try other common locations where the title might be
                 if (titleNode == null)
                     titleNode = doc.DocumentNode.SelectSingleNode("//div[@class='container']//h1");
 
@@ -515,27 +506,22 @@ namespace _4Save
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
 
-                    // If the title contains the PPSA ID, extract just the title part
                     if (title.Contains(ppsaId))
                     {
                         title = title.Replace(ppsaId, "").Trim();
-
-                        // Remove "- prosperopatches.com" if present
                         title = title.Replace("- prosperopatches.com", "").Trim();
                     }
 
                     title = CleanupTitle(title);
 
-                    // If we found a title, ensure we return the URL
                     if (!string.IsNullOrEmpty(title))
                         return (title, url);
                 }
 
                 return (string.Empty, string.Empty);
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"Error parsing prosperopatches.com: {ex.Message}");
                 return (string.Empty, string.Empty);
             }
         }
