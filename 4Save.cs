@@ -525,6 +525,14 @@ namespace _4Save
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
 
+                    // Check for 404 error in title (similar to serialstation check)
+                    if (title.Contains("404") && title.Contains("Not Found"))
+                        return (string.Empty, string.Empty);
+
+                    // Check for PS5 generic title which indicates 404/not found
+                    if (title.Contains("PlayStation 5 game update database"))
+                        return (string.Empty, string.Empty);
+
                     if (title.Contains(ppsaId))
                     {
                         title = title.Replace(ppsaId, "").Trim();
