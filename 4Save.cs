@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SQLite;
 using System.Diagnostics;
 using System.Drawing;
@@ -50,6 +51,20 @@ namespace _4Save
             this.MaximumSize = new System.Drawing.Size(850, 2000);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
+
+            // Set the form icon
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.ico");
+            if (File.Exists(iconPath))
+            {
+                try
+                {
+                    this.Icon = new Icon(iconPath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading icon: {ex.Message}");
+                }
+            }
 
             // Folder path selection
             Label lblFolderPath = new()
