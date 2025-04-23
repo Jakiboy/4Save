@@ -1,6 +1,6 @@
 # 4Save
 
-4Save is a tool for effortlessly **managing PlayStation game saves**! Simply scan your save data folder, and let 4Save automatically match each Game ID with its corresponding game title
+4Save is a tool for effortlessly **managing PlayStation game saves**! Simply scan your save data folder, and let 4Save automatically match each Game ID with its corresponding game title. Supports both PS4 & PS5 IDs.
 
 ## Databases
 
