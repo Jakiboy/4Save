@@ -47,7 +47,7 @@ namespace _4Save
 
         private void InitializeComponent()
         {
-            this.Text = "4Save (Games Title Lookup)";
+            this.Text = "4Save (PS4 & PS5 Game ID Lookup Tool)";
             this.Size = new System.Drawing.Size(850, 600);
             this.MinimumSize = new System.Drawing.Size(850, 400);
             this.MaximumSize = new System.Drawing.Size(850, 2000);
@@ -124,7 +124,7 @@ namespace _4Save
             listResults.Columns.Add("Title", 250);
             listResults.Columns.Add("Platform", 60);
             listResults.Columns.Add("Date", 180);
-            listResults.Columns.Add("Actions", 150);
+            listResults.Columns.Add("Actions", 200); // Increased from 150 to 200
 
             // Enable double buffering for smoother UI
             typeof(ListView).InvokeMember("DoubleBuffered",
@@ -301,8 +301,15 @@ namespace _4Save
                     // Add date
                     item.SubItems.Add(info.Date?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Unknown");
 
-                    // Add actions column with Open and Delete buttons
-                    var actionsSubItem = item.SubItems.Add("📁 Open | 🗑️ Delete");
+                    // Add actions column with Open, Visit and Delete buttons - increase column width
+                    string actionsText = "📁 Open";
+                    if (!string.IsNullOrEmpty(info.Link))
+                    {
+                        actionsText += " | 🔗 Visit";
+                    }
+                    actionsText += " | 🗑️ Delete";
+
+                    item.SubItems.Add(actionsText);
 
                     // Store the info in the item's tag
                     item.Tag = info;
@@ -564,34 +571,34 @@ namespace _4Save
 
             if (item.Tag is CusaInfo info)
             {
-                // Handle Title column click (column index 1)
-                if (columnIndex == 1 && !string.IsNullOrEmpty(info.Link))
+                // Handle Actions column (column index 4)
+                if (columnIndex == 4)
                 {
-                    try
-                    {
-                        // Open the link in default browser
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = info.Link,
-                            UseShellExecute = true
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Error opening link: {ex.Message}", "Error",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-                // Handle Actions column (column index 5)
-                else if (columnIndex == 5)
-                {
-                    // Determine if Open or Delete was clicked based on X position
                     string actionText = hitTest.SubItem.Text;
-                    int separatorIndex = actionText.IndexOf("|");
-                    int openWidth = TextRenderer.MeasureText(actionText.Substring(0, separatorIndex), listResults.Font).Width;
 
-                    // Open folder action (left side of the separator)
-                    if (e.X - hitTest.SubItem.Bounds.Left <= openWidth)
+                    // Calculate positions of components in the Actions text
+                    int firstSeparatorIndex = actionText.IndexOf("|");
+                    int secondSeparatorIndex = actionText.LastIndexOf("|");
+
+                    // Calculate widths for hit testing
+                    int openWidth = TextRenderer.MeasureText(actionText.Substring(0, firstSeparatorIndex), listResults.Font).Width;
+
+                    int visitWidth = 0;
+                    if (firstSeparatorIndex != secondSeparatorIndex) // If we have a Visit button
+                    {
+                        visitWidth = TextRenderer.MeasureText(
+                            actionText.Substring(0, secondSeparatorIndex),
+                            listResults.Font).Width;
+                    }
+                    else
+                    {
+                        visitWidth = openWidth; // If no Visit button, delete starts right after open
+                    }
+
+                    int clickPosition = e.X - hitTest.SubItem.Bounds.Left;
+
+                    // Open folder action
+                    if (clickPosition <= openWidth)
                     {
                         if (Directory.Exists(info.Directory))
                         {
@@ -611,7 +618,25 @@ namespace _4Save
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
-                    // Delete action (right side of the separator)
+                    // Visit link action - only if we have a link
+                    else if (firstSeparatorIndex != secondSeparatorIndex && clickPosition <= visitWidth && !string.IsNullOrEmpty(info.Link))
+                    {
+                        try
+                        {
+                            // Open the link in default browser
+                            Process.Start(new ProcessStartInfo
+                            {
+                                FileName = info.Link,
+                                UseShellExecute = true
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Error opening link: {ex.Message}", "Error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                    }
+                    // Delete action
                     else
                     {
                         DeleteCusaFromDatabase(info.CusaId, item);
