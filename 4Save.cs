@@ -118,7 +118,7 @@ namespace _4Save
                 Sorting = SortOrder.Ascending
             };
 
-            listResults.Columns.Add("CUSA ID", 100);
+            listResults.Columns.Add("ID", 100);
             listResults.Columns.Add("Title", 300);
             listResults.Columns.Add("Platform", 60);
             listResults.Columns.Add("Date", 180);
