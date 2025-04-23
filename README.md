@@ -2,8 +2,6 @@
 
 4Save is a tool for effortlessly **managing PlayStation game saves**! Simply scan your save data folder, and let 4Save automatically match each Game ID with its corresponding game title. Supports both PS4 & PS5 IDs.
 
-
-
 ## Features  
 
 * **Full Game Titles** – View a complete list of games with their proper names.
@@ -17,3 +15,5 @@
 * [Prosperopatches.com (PS5)](https://prosperopatches.com/)
 * [Orbispatches.com (PS4)](https://orbispatches.com/)
 * [Serialstation.com (PS4)](https://serialstation.com/)
+
+[![4Save](https://media.githubusercontent.com/media/Jakiboy/4Save/refs/heads/main/.static/preview.jpg)](#)
