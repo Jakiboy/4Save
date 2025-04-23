@@ -381,32 +381,29 @@ namespace _4Save
                 }
             }
 
-            info.Title = title ?? string.Empty;
+            info.Title = !string.IsNullOrEmpty(title) ? title : "❌Game not found";
             info.Link = link ?? string.Empty;
 
-            // Save to database if title was found
-            if (!string.IsNullOrEmpty(title))
+            // Save to database if we have a valid ID, even if title was not found
+            try
             {
-                try
-                {
-                    using var connection = GetConnection();
-                    connection.Open();
-                    connection.Execute(
-                        @"INSERT OR REPLACE INTO Games (Id, Title, Platform, Link, LastUpdated) 
-                              VALUES (@Id, @Title, @Platform, @Link, @LastUpdated)",
-                        new
-                        {
-                            Id = info.CusaId,
-                            Title = info.Title,
-                            Platform = info.Platform,
-                            Link = info.Link,
-                            LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                        });
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error saving to database: {ex.Message}");
-                }
+                using var connection = GetConnection();
+                connection.Open();
+                connection.Execute(
+                    @"INSERT OR REPLACE INTO Games (Id, Title, Platform, Link, LastUpdated) 
+                        VALUES (@Id, @Title, @Platform, @Link, @LastUpdated)",
+                    new
+                    {
+                        Id = info.CusaId,
+                        Title = info.Title,
+                        Platform = info.Platform,
+                        Link = info.Link,
+                        LastUpdated = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving to database: {ex.Message}");
             }
         }
 
