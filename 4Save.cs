@@ -32,21 +32,25 @@ namespace _4Save
 
     public class MainForm : Form
     {
-        private TextBox txtFolderPath;
+        private TextBox txtFolderPath = null!;
         private Button btnBrowse = null!;
         private Button btnScan = null!;
         private ListView listResults = null!;
         private Label lblStatus = null!;
-        private string dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "db.sqlite");
+        private readonly string dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "db.sqlite");
 
         public MainForm()
         {
             InitializeComponent();
             InitializeDatabase();
 
-            // Disable scan button initially
-            btnScan.Enabled = false;
-            txtFolderPath.TextChanged += TxtFolderPath_TextChanged;
+            // Ensure txtFolderPath is initialized before attaching the event handler
+            if (txtFolderPath != null)
+            {
+                // Disable scan button initially
+                btnScan.Enabled = false;
+                txtFolderPath.TextChanged += TxtFolderPath_TextChanged;
+            }
         }
 
         // Toggle scan button based on folder path validity
@@ -278,7 +282,7 @@ namespace _4Save
                     ).Where(c => c.Id != null).ToDictionary(c => c.Id!);
 
                     // Add cached info to the list
-                    foreach (var info in gameInfoList.Where(c => cachedInfo.ContainsKey(c.CusaId)))
+                    foreach (var info in gameInfoList.Where(c => c.CusaId != null && cachedInfo.ContainsKey(c.CusaId)))
                     {
                         info.Title = cachedInfo[info.CusaId].Title;
                         info.Platform = cachedInfo[info.CusaId].Platform;
