@@ -348,6 +348,7 @@ namespace _4Save
             // Lookup title from appropriate source based on platform
             string? title = null;
             string? link = null;
+            bool notFound = false;
 
             if (info.Platform == "PS4")
             {
@@ -368,6 +369,11 @@ namespace _4Save
                         title = serialResult.Title;
                         link = serialResult.Link;
                     }
+                    else
+                    {
+                        // If we tried serialstation.com and got no title, mark as not found
+                        notFound = true;
+                    }
                 }
             }
             else if (info.Platform == "PS5")
@@ -379,9 +385,22 @@ namespace _4Save
                     title = prosperoResult.Title;
                     link = prosperoResult.Link;
                 }
+                else
+                {
+                    notFound = true;
+                }
             }
 
-            info.Title = !string.IsNullOrEmpty(title) ? title : "❌Game not found";
+            // Set title to "Game not found" with X icon if the title is empty or notFound flag is true
+            if (string.IsNullOrEmpty(title) || notFound)
+            {
+                info.Title = "❌ Game not found";
+            }
+            else
+            {
+                info.Title = title;
+            }
+
             info.Link = link ?? string.Empty;
 
             // Save to database if we have a valid ID, even if title was not found
@@ -530,6 +549,10 @@ namespace _4Save
         {
             if (string.IsNullOrEmpty(title))
                 return title;
+
+            // Check for 404 error message from serialstation.com
+            if (title.Contains("404 Page Not Found :("))
+                return string.Empty;
 
             // Remove any trailing unnecessary text that might appear in titles
             title = Regex.Replace(title, @"\s*\(CUSA\d+\)\s*$", "", RegexOptions.IgnoreCase);
