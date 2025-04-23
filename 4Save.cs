@@ -427,7 +427,7 @@ namespace _4Save
             }
         }
 
-        private async Task<string> GetInfoFromProsperoPatches(string ppsaId)
+        private static async Task<string> GetInfoFromProsperoPatches(string ppsaId)
         {
             try
             {
@@ -441,19 +441,42 @@ namespace _4Save
 
                 string? title = null;
 
-                // Parse title using the correct CSS selector: header h1.bd-title
-                HtmlNode titleNode = doc.DocumentNode.SelectSingleNode("//header//h1[@class='bd-title']");
+                // Try multiple possible selectors to find the title
+                // First try the header/h1 selector
+                HtmlNode? titleNode = doc.DocumentNode.SelectSingleNode("//header//h1[@class='bd-title']");
+
+                // If not found, try other common locations where the title might be
+                if (titleNode == null)
+                    titleNode = doc.DocumentNode.SelectSingleNode("//div[@class='container']//h1");
+
+                if (titleNode == null)
+                    titleNode = doc.DocumentNode.SelectSingleNode("//h1");
+
+                if (titleNode == null)
+                    titleNode = doc.DocumentNode.SelectSingleNode("//title");
+
                 if (titleNode != null)
                 {
                     title = HttpUtility.HtmlDecode(titleNode.InnerText.Trim());
+
+                    // If the title contains the PPSA ID, extract just the title part
+                    if (title.Contains(ppsaId))
+                    {
+                        title = title.Replace(ppsaId, "").Trim();
+
+                        // Remove "- prosperopatches.com" if present
+                        title = title.Replace("- prosperopatches.com", "").Trim();
+                    }
+
                     title = CleanupTitle(title);
                 }
 
-                return title;
+                return title ?? string.Empty;
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                Console.WriteLine($"Error parsing prosperopatches.com: {ex.Message}");
+                return string.Empty;
             }
         }
 
