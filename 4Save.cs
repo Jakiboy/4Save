@@ -82,7 +82,7 @@ namespace _4Save
             Label lblFolderPath = new()
 
             {
-                Text = "Select Source Folder:",
+                Text = "Source Folder:",
                 Location = new System.Drawing.Point(10, 15),
                 AutoSize = true
             };
