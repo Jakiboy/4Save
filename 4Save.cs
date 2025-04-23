@@ -372,7 +372,7 @@ namespace _4Save
             }
             else if (info.Platform == "PS5")
             {
-                // Use prosperopatches.com for PS5 games
+                // Always use prosperopatches.com for PS5 games (PPSA IDs)
                 var prosperoResult = await GetInfoFromProsperoPatches(info.CusaId);
                 if (!string.IsNullOrEmpty(prosperoResult.Title))
                 {
