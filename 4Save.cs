@@ -43,6 +43,18 @@ namespace _4Save
         {
             InitializeComponent();
             InitializeDatabase();
+
+            // Disable scan button initially
+            btnScan.Enabled = false;
+
+            // Add text changed handler to enable/disable scan button based on folder path
+            txtFolderPath.TextChanged += TxtFolderPath_TextChanged;
+        }
+
+        // Check if folder path is valid and toggle scan button accordingly
+        private void TxtFolderPath_TextChanged(object? sender, EventArgs e)
+        {
+            btnScan.Enabled = !string.IsNullOrWhiteSpace(txtFolderPath.Text) && Directory.Exists(txtFolderPath.Text);
         }
 
         private void InitializeComponent()
