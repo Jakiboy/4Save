@@ -58,9 +58,9 @@ namespace _4Save
         private void InitializeComponent()
         {
             this.Text = "4Save (PS4 & PS5 Game ID Lookup Tool)";
-            this.Size = new System.Drawing.Size(850, 600);
-            this.MinimumSize = new System.Drawing.Size(850, 400);
-            this.MaximumSize = new System.Drawing.Size(850, 2000);
+            this.Size = new System.Drawing.Size(800, 600);
+            this.MinimumSize = new System.Drawing.Size(800, 400);
+            this.MaximumSize = new System.Drawing.Size(800, 2000);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
 
@@ -97,7 +97,7 @@ namespace _4Save
             {
                 Text = "Browse",
                 Location = new System.Drawing.Point(660, 10),
-                Width = 100
+                Width = 110
             };
             btnBrowse.Click += BtnBrowse_Click;
 
@@ -105,7 +105,7 @@ namespace _4Save
             {
                 Text = "Scan",
                 Location = new System.Drawing.Point(660, 45),
-                Width = 100
+                Width = 110
             };
             btnScan.Click += BtnScan_Click;
 
@@ -133,8 +133,8 @@ namespace _4Save
             listResults.Columns.Add("ID", 100);
             listResults.Columns.Add("Title", 250);
             listResults.Columns.Add("Platform", 60);
-            listResults.Columns.Add("Date", 180);
-            listResults.Columns.Add("Actions", 200); // Increased from 150 to 200
+            listResults.Columns.Add("Date", 150);
+            listResults.Columns.Add("Actions", 180);
 
             // Enable double buffering for smoother UI
             typeof(ListView).InvokeMember("DoubleBuffered",
@@ -694,7 +694,7 @@ namespace _4Save
         }
 
         // Column sorting handler for ListView
-        private void ListResults_ColumnClick(object sender, ColumnClickEventArgs e)
+        private void ListResults_ColumnClick(object? sender, ColumnClickEventArgs e)
         {
             // Don't sort the Actions column (column index 4)
             if (e.Column == 4)
