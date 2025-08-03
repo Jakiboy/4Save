@@ -223,7 +223,7 @@ namespace _4Save
             }
         }
 
-        private async void BtnScan_Click(object sender, EventArgs e)
+        private async void BtnScan_Click(object? sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtFolderPath.Text) || !Directory.Exists(txtFolderPath.Text))
             {
@@ -282,11 +282,11 @@ namespace _4Save
                     ).Where(c => c.Id != null).ToDictionary(c => c.Id!);
 
                     // Add cached info to the list
-                    foreach (var info in gameInfoList.Where(c => c.CusaId != null && cachedInfo.ContainsKey(c.CusaId)))
+                    foreach (var info in gameInfoList.Where(c => !string.IsNullOrEmpty(c.CusaId) && cachedInfo.ContainsKey(c.CusaId!)))
                     {
-                        info.Title = cachedInfo[info.CusaId].Title;
-                        info.Platform = cachedInfo[info.CusaId].Platform;
-                        info.Link = cachedInfo[info.CusaId].Link;
+                        info.Title = cachedInfo[info.CusaId!].Title;
+                        info.Platform = cachedInfo[info.CusaId!].Platform;
+                        info.Link = cachedInfo[info.CusaId!].Link;
                     }
                 }
 
@@ -345,8 +345,8 @@ namespace _4Save
         private async Task LookupAndSaveTitle(CusaInfo info)
         {
             // Determine platform based on ID prefix
-            info.Platform = info.CusaId.StartsWith("CUSA", StringComparison.OrdinalIgnoreCase) ? "PS4" :
-                            info.CusaId.StartsWith("PPSA", StringComparison.OrdinalIgnoreCase) ? "PS5" :
+            info.Platform = !string.IsNullOrEmpty(info.CusaId) && info.CusaId.StartsWith("CUSA", StringComparison.OrdinalIgnoreCase) ? "PS4" :
+                            !string.IsNullOrEmpty(info.CusaId) && info.CusaId.StartsWith("PPSA", StringComparison.OrdinalIgnoreCase) ? "PS5" :
                             "Unknown";
 
             // Lookup title from appropriate source based on platform
@@ -357,7 +357,7 @@ namespace _4Save
             if (info.Platform == "PS4")
             {
                 // First try orbispatches.com for PS4 games
-                var orbisResult = await GetInfoFromOrbisPatches(info.CusaId);
+                var orbisResult = await GetInfoFromOrbisPatches(info.CusaId!);
                 if (!string.IsNullOrEmpty(orbisResult.Title))
                 {
                     title = orbisResult.Title;
@@ -367,7 +367,7 @@ namespace _4Save
                 // If not found, try serialstation.com
                 if (string.IsNullOrEmpty(title))
                 {
-                    var serialResult = await GetInfoFromSerialStation(info.CusaId);
+                    var serialResult = await GetInfoFromSerialStation(info.CusaId!);
                     if (!string.IsNullOrEmpty(serialResult.Title))
                     {
                         title = serialResult.Title;
@@ -383,7 +383,7 @@ namespace _4Save
             else if (info.Platform == "PS5")
             {
                 // Always use prosperopatches.com for PS5 games (PPSA IDs)
-                var prosperoResult = await GetInfoFromProsperoPatches(info.CusaId);
+                var prosperoResult = await GetInfoFromProsperoPatches(info.CusaId!);
                 if (!string.IsNullOrEmpty(prosperoResult.Title))
                 {
                     title = prosperoResult.Title;
