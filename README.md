@@ -12,8 +12,8 @@
 
 ## Databases
 
-* [Prosperopatches.com (PS5)](https://prosperopatches.com/)
-* [Orbispatches.com (PS4)](https://orbispatches.com/)
+* [Prosperopatches.com (PS5)](https://prosperopatches.com/) ⭐
+* [Orbispatches.com (PS4)](https://orbispatches.com/) ⭐
 * [Serialstation.com (PS4)](https://serialstation.com/)
 
 
